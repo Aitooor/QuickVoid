@@ -58,12 +58,14 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
         sender.sendMessage("Creating a void world named '" + worldName + "'"
                 + (useMultiverse ? " using Multiverse..." : " using native mode..."));
 
-        if (plugin.createVoidWorld(worldName, useMultiverse)) {
-            sender.sendMessage(Component.text("A world has been successfully created")
-                    .color(NamedTextColor.GREEN));
-        } else {
-            sender.sendMessage(Component.text("Failed to create a void world").color(NamedTextColor.RED));
-        }
+        plugin.createVoidWorldAsync(worldName, useMultiverse, success -> {
+            if (success) {
+                sender.sendMessage(Component.text("A world has been successfully created")
+                        .color(NamedTextColor.GREEN));
+            } else {
+                sender.sendMessage(Component.text("Failed to create a void world").color(NamedTextColor.RED));
+            }
+        });
         return true;
     }
 

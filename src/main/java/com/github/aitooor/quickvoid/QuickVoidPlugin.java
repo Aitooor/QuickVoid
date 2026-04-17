@@ -4,8 +4,11 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.function.Consumer;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -21,12 +24,17 @@ public class QuickVoidPlugin extends JavaPlugin {
 
     private static final Pattern WORLD_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_\\-]{1,32}$");
     private static QuickVoidPlugin instance;
+
+    private final Set<String> worldsInProgress = new HashSet<>();
     private MultiverseCoreApi coreApi;
     private boolean multiverseChecked;
+    private File templateLevelFile;
 
     @Override
     public void onEnable() {
         instance = this;
+        ensureTemplateLevelDat();
+
         CommandHandler cmd = new CommandHandler(instance);
         var pluginCmd = getServer().getPluginCommand("quickvoid");
         if (pluginCmd != null) {
@@ -52,18 +60,6 @@ public class QuickVoidPlugin extends JavaPlugin {
         return name == null || !WORLD_NAME_PATTERN.matcher(name).matches();
     }
 
-    public boolean createVoidWorld(String name, boolean useMultiverse) {
-        if (isWorldNameInvalid(name)) {
-            getLogger().warning("Invalid world name: " + name);
-            return false;
-        }
-        if (Bukkit.getWorld(name) != null) {
-            getLogger().warning("World '" + name + "' already exists");
-            return false;
-        }
-        return useMultiverse ? createVoidWorldWithMultiverse(name) : createVoidWorldNative(name);
-    }
-
     public boolean isMultiverseMissing() {
         if (multiverseChecked) {
             return coreApi == null;
@@ -80,14 +76,48 @@ public class QuickVoidPlugin extends JavaPlugin {
         }
     }
 
-    private boolean createVoidWorldNative(String name) {
-        try {
-            prepareLevelDat(name);
-        } catch (IOException e) {
-            getLogger().severe("Failed to copy level.dat: " + e.getMessage());
-            return false;
+    public void createVoidWorldAsync(String name, boolean useMultiverse, Consumer<Boolean> callback) {
+        if (isWorldNameInvalid(name)) {
+            getLogger().warning("Invalid world name: " + name);
+            callback.accept(false);
+            return;
+        }
+        if (Bukkit.getWorld(name) != null) {
+            getLogger().warning("World '" + name + "' already exists");
+            callback.accept(false);
+            return;
         }
 
+        synchronized (worldsInProgress) {
+            if (!worldsInProgress.add(name.toLowerCase())) {
+                getLogger().warning("World creation already in progress for '" + name + "'");
+                callback.accept(false);
+                return;
+            }
+        }
+
+        // File operations can run async to minimize impact on server ticks.
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                prepareLevelDat(name);
+            } catch (IOException e) {
+                getLogger().severe("Failed to copy level.dat: " + e.getMessage());
+                finishWorldCreation(name, callback, false);
+                return;
+            }
+
+            Bukkit.getScheduler().runTask(this, () -> {
+                if (useMultiverse) {
+                    createVoidWorldWithMultiverse(name, callback);
+                } else {
+                    boolean success = createVoidWorldNative(name);
+                    finishWorldCreation(name, callback, success);
+                }
+            });
+        });
+    }
+
+    private boolean createVoidWorldNative(String name) {
         World world = Bukkit.createWorld(new WorldCreator(name).environment(World.Environment.NORMAL));
         if (world == null) {
             getLogger().severe("Failed to create native void world '" + name + "'");
@@ -98,37 +128,44 @@ public class QuickVoidPlugin extends JavaPlugin {
         return true;
     }
 
-    private boolean createVoidWorldWithMultiverse(String name) {
+    private void createVoidWorldWithMultiverse(String name, Consumer<Boolean> callback) {
         if (isMultiverseMissing()) {
             getLogger().warning("Multiverse mode requested but Multiverse-Core is not available");
-            return false;
-        }
-
-        try {
-            prepareLevelDat(name);
-        } catch (IOException e) {
-            getLogger().severe("Failed to copy level.dat: " + e.getMessage());
-            return false;
+            finishWorldCreation(name, callback, false);
+            return;
         }
 
         WorldManager worldManager = Objects.requireNonNull(coreApi).getWorldManager();
-        final boolean[] success = { false };
         worldManager.loadWorld(name)
-                .onSuccess(ignored -> success[0] = true)
-                .onFailure(reason -> getLogger().severe("Failed to load void world '" + name + "': " + reason));
+                .onSuccess(ignored -> {
+                    World world = Bukkit.getWorld(name);
+                    if (world != null) {
+                        placeSpawnPlatform(world);
+                        finishWorldCreation(name, callback, true);
+                    } else {
+                        finishWorldCreation(name, callback, false);
+                    }
+                })
+                .onFailure(reason -> {
+                    getLogger().severe("Failed to load void world '" + name + "': " + reason);
+                    finishWorldCreation(name, callback, false);
+                });
+    }
 
-        World world = Bukkit.getWorld(name);
-        if (success[0] && world != null) {
-            placeSpawnPlatform(world);
-            return true;
+    private void ensureTemplateLevelDat() {
+        saveResource("level.dat", false);
+        templateLevelFile = new File(getDataFolder(), "level.dat");
+        if (!templateLevelFile.isFile()) {
+            getLogger().severe("level.dat template is missing in plugin data folder.");
         }
-        return false;
     }
 
     private void prepareLevelDat(String name) throws IOException {
-        saveResource("level.dat", false);
+        if (templateLevelFile == null || !templateLevelFile.isFile()) {
+            throw new IOException("Template level.dat is missing");
+        }
+
         File container = Bukkit.getWorldContainer();
-        File templateLevelFile = new File(getDataFolder(), "level.dat");
         File newLevelDir = new File(container, name);
         if (!newLevelDir.isDirectory()) {
             boolean created = newLevelDir.mkdirs();
@@ -153,5 +190,12 @@ public class QuickVoidPlugin extends JavaPlugin {
                         .setType(Material.BEDROCK);
             }
         }
+    }
+
+    private void finishWorldCreation(String name, Consumer<Boolean> callback, boolean success) {
+        synchronized (worldsInProgress) {
+            worldsInProgress.remove(name.toLowerCase());
+        }
+        callback.accept(success);
     }
 }
