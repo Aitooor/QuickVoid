@@ -4,3 +4,8 @@
 .settings/
 bin/
 lib/
+
+/.idea/
+/.gradle/
+/build/
+*.iml
