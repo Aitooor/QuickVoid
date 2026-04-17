@@ -4,3 +4,6 @@
 .settings/
 bin/
 lib/
+
+/.idea/
+*.iml
