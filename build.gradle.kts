@@ -38,6 +38,12 @@ tasks.compileJava {
     options.encoding = "UTF-8"
 }
 
+tasks.processResources {
+    from("src") {
+        include("level.dat")
+    }
+}
+
 bukkit {
     prefix = "QuickVoid"
     name = rootProject.name
@@ -55,7 +61,7 @@ bukkit {
             aliases = listOf("qv")
             description = "Reveals plugin functionality"
             permission = "quickvoid.admin"
-            usage = "Usage: /<command> <create> <world_name>"
+            usage = "Usage: /<command> create <world_name> [--mv]"
         }
     }
 
@@ -75,9 +81,10 @@ paper {
     foliaSupported = true
 
     serverDependencies {
-        // During server run time, require LuckPerms, add it to the classpath, and load it before us
-        register("LuckPMultiverse-Coreerms") {
+        register("Multiverse-Core") {
             load = PaperPluginDescription.RelativeLoadOrder.BEFORE
+            required = false
+            joinClasspath = true
         }
     }
 
