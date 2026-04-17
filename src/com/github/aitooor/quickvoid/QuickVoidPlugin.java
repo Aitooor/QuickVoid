@@ -1,4 +1,4 @@
-package com.github.inc0grepoz.quickvoid;
+package com.github.aitooor.quickvoid;
 
 import java.io.File;
 import java.io.IOException;
@@ -13,9 +13,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 import com.onarandombox.MultiverseCore.MultiverseCore;
 import com.onarandombox.MultiverseCore.api.MVWorldManager;
 
-public class QuickVoid extends JavaPlugin {
+public class QuickVoidPlugin extends JavaPlugin {
 
-    private static QuickVoid instance;
+    private static QuickVoidPlugin instance;
     private MVWorldManager mvwm;
 
     @Override
@@ -29,11 +29,11 @@ public class QuickVoid extends JavaPlugin {
     }
 
     /**
-     * Returns a running plugin instance of QuickVoid.
+     * Returns a running plugin instance of QuickVoidPlugin.
      * 
      * @return a plugin
      */
-    public static QuickVoid getInstance() {
+    public static QuickVoidPlugin getInstance() {
         return instance;
     }
 

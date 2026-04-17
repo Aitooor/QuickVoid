@@ -1,4 +1,4 @@
-package com.github.inc0grepoz.quickvoid;
+package com.github.aitooor.quickvoid;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,9 +11,9 @@ import org.bukkit.command.TabCompleter;
 
 public class CommandHandler implements CommandExecutor, TabCompleter {
 
-    private final QuickVoid plugin;
+    private final QuickVoidPlugin plugin;
 
-    public CommandHandler(QuickVoid plugin) {
+    public CommandHandler(QuickVoidPlugin plugin) {
         this.plugin = plugin;
     }
 
